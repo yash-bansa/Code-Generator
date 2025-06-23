@@ -1,0 +1,25 @@
+{
+  "overall_status": "passed",
+  "files_validated": [
+    {
+      "file_path": "examples\\sample_project\\data_loader.py",
+      "syntax_valid": true,
+      "errors": [],
+      "warnings": [],
+      "suggestions": [],
+      "metrics": {
+        "lines_of_code": 17,
+        "blank_lines": 2,
+        "comment_lines": 0,
+        "functions_count": 1,
+        "classes_count": 0,
+        "imports_count": 2,
+        "complexity_estimate": "low"
+      }
+    }
+  ],
+  "errors_found": [],
+  "warnings": [],
+  "suggestions": [],
+  "fixed_files": []
+}
