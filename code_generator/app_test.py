@@ -8,11 +8,11 @@ import os
 ### Observability Langsmith
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
-os.environ["LANGCHAIN_API_KEY"] = "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"
+os.environ["LANGCHAIN_API_KEY"] = ""
 os.environ["LANGCHAIN_PROJECT"] = "App-Test-Chatbot"
 
 # -------- CONFIGURE YOUR GROQ API KEY AND MODEL --------
-GROQ_API_KEY = "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"
+GROQ_API_KEY = ""
 GROQ_API_URL = "https://api.groq.com/openai/v1"
 MODEL_NAME = "llama-3.1-8b-instant"
 
