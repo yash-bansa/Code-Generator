@@ -24,12 +24,12 @@
       "warnings": [],
       "suggestions": [],
       "metrics": {
-        "lines_of_code": 36,
-        "blank_lines": 7,
+        "lines_of_code": 44,
+        "blank_lines": 9,
         "comment_lines": 1,
-        "functions_count": 2,
+        "functions_count": 3,
         "classes_count": 0,
-        "imports_count": 3,
+        "imports_count": 5,
         "complexity_estimate": "low"
       }
     }

@@ -3,7 +3,7 @@ import pandas as pd
 
 def create_spark_session():
     """
-    Create a SparkSession instance for data loading and processing.
+    Create a PySpark SparkSession instance for data processing.
 
     Returns:
         SparkSession: A SparkSession instance.
@@ -26,8 +26,8 @@ def load_data():
             "score": [95, 88, 76]
         }
         spark = create_spark_session()
-        data_df = spark.createDataFrame(data)
-        return data_df
+        df = spark.createDataFrame(data)
+        return df
     except Exception as e:
         print(f"An error occurred: {e}")
         return None

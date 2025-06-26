@@ -1,34 +1,42 @@
 from pyspark.sql import SparkSession
-import pyspark
+from data_loader import load_data
 
-def load_data():
+def create_spark_session():
     """
-    Load sample data using PySpark's data loading API.
+    Create a SparkSession instance for data processing.
 
     Returns:
-        pyspark.sql.DataFrame: A DataFrame containing sample data.
+        SparkSession: A SparkSession instance.
     """
-    spark = SparkSession.builder.appName('Sample Project').getOrCreate()
-    df = spark.createDataFrame([(1, 'John', 90), (2, 'Jane', 70), (3, 'Bob', 95)], ['c_id', 'name', 'score'])
-    return df
+    return SparkSession.builder.appName('Sample Pipeline').getOrCreate()
+
+def load_data(spark_session):
+    """
+    Load data from a CSV file using PySpark's SparkSession.
+
+    Args:
+        spark_session (SparkSession): A SparkSession instance.
+
+    Returns:
+        DataFrame: A PySpark DataFrame containing the loaded data.
+    """
+    return spark_session.read.csv('./examples/sample_project/data_loader.py', header=True, inferSchema=True)
 
 def run_pipeline():
     """
     Run the data processing pipeline using PySpark's DataFrame API.
-
-    Returns:
-        None
     """
     try:
-        df = load_data()
+        spark_session = create_spark_session()
+        df = load_data(spark_session)
         print("Data Loaded:")
-        print(df)
+        df.show()
 
         # Add processing logic
-        df = df.withColumn('passed', df['score'] > 80)
+        df = df.withColumn("passed", df["score"] > 80)
 
         print("\nProcessed Data:")
-        print(df)
+        df.show()
     except Exception as e:
         print(f"An error occurred: {e}")
 
