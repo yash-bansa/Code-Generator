@@ -97,7 +97,7 @@ Return JSON:
 
             if response:
                 cleaned_response = self._clean_json_response(response)
-                print(f"[DEBUG] LLM Response (cleaned): {cleaned_response[:300]}")
+                # print(f"[DEBUG] LLM Response (cleaned): {cleaned_response[:300]}")
                 return json.loads(cleaned_response)
 
             return {"needs_modification": False}

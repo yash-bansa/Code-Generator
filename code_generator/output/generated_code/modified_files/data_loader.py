@@ -1,17 +1,23 @@
-import pandas as pd
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import lit
 
-def load_data():
+def load_data(spark_session):
     """
-    Simulate loading data from a CSV or database.
+    Load data from a simulated source and add a 'rank' column.
+
+    Args:
+        spark_session (SparkSession): The SparkSession to use for creating the DataFrame.
 
     Returns:
-        pd.DataFrame: Loaded data.
+        DataFrame: A Spark DataFrame with the loaded data and a 'rank' column.
     """
-    data = {
-        "c_id": [1, 2, 3],
-        "name": ["Alice", "Bob", "Charlie"],
-        "score": [95, 88, 76],
-        "check": [True, False, True]  # Added a new column 'check' to the loaded data
-    }
-    df = pd.DataFrame(data)
-    return df
+    try:
+        df = spark_session.createDataFrame([
+            {'c_id': 1, 'name': 'Alice', 'score': 95},
+            {'c_id': 2, 'name': 'Bob', 'score': 88},
+            {'c_id': 3, 'name': 'Charlie', 'score': 76}
+        ]).withColumn('rank', lit(1))
+        return df
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None

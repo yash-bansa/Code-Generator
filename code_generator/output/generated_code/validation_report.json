@@ -8,12 +8,12 @@
       "warnings": [],
       "suggestions": [],
       "metrics": {
-        "lines_of_code": 17,
-        "blank_lines": 2,
+        "lines_of_code": 23,
+        "blank_lines": 3,
         "comment_lines": 0,
         "functions_count": 1,
         "classes_count": 0,
-        "imports_count": 2,
+        "imports_count": 5,
         "complexity_estimate": "low"
       }
     }
