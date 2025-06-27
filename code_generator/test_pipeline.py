@@ -3,7 +3,8 @@ from langgraph.graph import StateGraph, END
 from typing import TypedDict, List, Dict, Any
 from agents.QueryRephraseAgent import QueryRephraseAgent
 from agents.parser_agent import ParserAgent
-from agents.code_identifier_agent import CodeIdentifierAgent
+from agents.master_planner_agent import MasterPlannerAgent
+from agents.delta_analyzer_agent import DeltaAnalyzerAgent
 from agents.code_generator_agent import CodeGeneratorAgent  
 from agents.code_validator_agent import CodeValidatorAgent
 from config.settings import settings
@@ -32,7 +33,8 @@ class BotState(TypedDict):
 # ---------- Agents ------------------------
 rephrase_agent = QueryRephraseAgent()
 parser_agent = ParserAgent()
-code_identifier_agent = CodeIdentifierAgent()
+master_planner_agent = MasterPlannerAgent()
+delta_analyzer_agent = DeltaAnalyzerAgent()
 code_generator_agent = CodeGeneratorAgent()  
 validator_agent = CodeValidatorAgent()
 
@@ -64,12 +66,12 @@ def parser_node(state: BotState) -> BotState:
     return state
 
 def identifier_node(state: BotState) -> BotState:
-    result = code_identifier_agent.identify_target_files(
+    result = master_planner_agent.identify_target_files(
         parsed_config=state["parsed_config"],
         project_path=settings.PROJECT_ROOT_PATH,
         user_question=state["developer_task"]
     )
-    mod_plan = code_identifier_agent.create_modification_plan(result, state["parsed_config"])
+    mod_plan = delta_analyzer_agent.create_modification_plan(result, state["parsed_config"])
     state["identified_files"] = result
     state["modification_plan"] = mod_plan
     return state
@@ -112,12 +114,12 @@ def validation_node(state: BotState) -> BotState:
         )
     else:
         for i in range(max_retries):
-            retry_result = code_identifier_agent.identify_target_files(
+            retry_result = master_planner_agent.identify_target_files(
                 parsed_config=state["parsed_config"],
                 project_path=settings.PROJECT_ROOT_PATH,
                 user_question=state["developer_task"]
             )
-            retry_plan = code_identifier_agent.create_modification_plan(retry_result, state["parsed_config"])
+            retry_plan = delta_analyzer_agent.create_modification_plan(retry_result, state["parsed_config"])
 
             retry_generated = code_generator_agent.generate_code_modifications(retry_plan)
             retry_validated = validator_agent.validate_code_changes(retry_generated.get("modified_files", []))
@@ -159,7 +161,7 @@ final_graph = graph.compile()
 
 # -------------- Streamlit UI ----------------
 st.set_page_config(page_title="💡 Dev Task to Code Generator", layout="wide")
-st.title("🧠 Developer Task → Config → Code Generator")
+st.title("🧐 Developer Task → Config → Code Generator")
 
 if "session_state" not in st.session_state:
     st.session_state.session_state = {
@@ -188,7 +190,7 @@ with st.chat_message("assistant"):
     if st.session_state.session_state["is_satisfied"]:
         st.success("✅ Developer task accepted and processed.")
 
-        st.markdown(f"**🧩 Developer Task:** `{st.session_state.session_state['developer_task']}`")
+        st.markdown(f"**🔩 Developer Task:** `{st.session_state.session_state['developer_task']}`")
 
         st.divider()
         st.subheader("📦 Parsed Configuration")
@@ -197,7 +199,7 @@ with st.chat_message("assistant"):
         st.subheader("🔍 Identified Files to Modify")
         st.json(st.session_state.session_state["identified_files"])
 
-        st.subheader("🛠️ Modification Plan")
+        st.subheader("💪 Modification Plan")
         st.json(st.session_state.session_state["modification_plan"])
 
         st.subheader("💻 Generated Code Modifications")
@@ -207,7 +209,7 @@ with st.chat_message("assistant"):
         else:
             for file in modified_files:
                 st.markdown(f"### 📄 `{file['file_path']}`")
-                st.caption(f"🛠️ {file.get('modifications_applied', 0)} modifications applied")
+                st.caption(f"💪 {file.get('modifications_applied', 0)} modifications applied")
                 col1, col2 = st.columns(2)
                 with col1:
                     st.markdown("**🔍 Original Content**")
@@ -217,7 +219,7 @@ with st.chat_message("assistant"):
                     st.code(file["modified_content"], language="python")
 
         st.divider()
-        st.subheader("🤖 AI Validation Result")
+        st.subheader("🧠 AI Validation Result")
         validation_result = st.session_state.session_state.get("validation_result", {})
         if not validation_result:
             st.info("Validation did not run.")
@@ -239,3 +241,4 @@ if st.session_state.session_state["user_history"]:
     with st.expander("🗒️ Query History"):
         for i, q in enumerate(st.session_state.session_state["user_history"], 1):
             st.write(f"{i}. {q}")
+

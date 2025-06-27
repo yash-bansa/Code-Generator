@@ -8,10 +8,10 @@
       "warnings": [],
       "suggestions": [],
       "metrics": {
-        "lines_of_code": 33,
-        "blank_lines": 5,
+        "lines_of_code": 23,
+        "blank_lines": 2,
         "comment_lines": 1,
-        "functions_count": 2,
+        "functions_count": 1,
         "classes_count": 0,
         "imports_count": 5,
         "complexity_estimate": "low"
@@ -24,12 +24,12 @@
       "warnings": [],
       "suggestions": [],
       "metrics": {
-        "lines_of_code": 44,
-        "blank_lines": 9,
+        "lines_of_code": 26,
+        "blank_lines": 6,
         "comment_lines": 1,
-        "functions_count": 3,
+        "functions_count": 1,
         "classes_count": 0,
-        "imports_count": 5,
+        "imports_count": 3,
         "complexity_estimate": "low"
       }
     }

@@ -1,42 +1,24 @@
+import pyspark
 from pyspark.sql import SparkSession
-from data_loader import load_data
-
-def create_spark_session():
-    """
-    Create a SparkSession instance for data processing.
-
-    Returns:
-        SparkSession: A SparkSession instance.
-    """
-    return SparkSession.builder.appName('Sample Pipeline').getOrCreate()
-
-def load_data(spark_session):
-    """
-    Load data from a CSV file using PySpark's SparkSession.
-
-    Args:
-        spark_session (SparkSession): A SparkSession instance.
-
-    Returns:
-        DataFrame: A PySpark DataFrame containing the loaded data.
-    """
-    return spark_session.read.csv('./examples/sample_project/data_loader.py', header=True, inferSchema=True)
 
 def run_pipeline():
     """
-    Run the data processing pipeline using PySpark's DataFrame API.
+    Run the data pipeline using PySpark.
+    
+    This function loads data, applies transformation logic, and outputs the result.
     """
+    spark = SparkSession.builder.appName('Sample Pipeline').getOrCreate()
     try:
-        spark_session = create_spark_session()
-        df = load_data(spark_session)
+        df = spark.createDataFrame(load_data())
+        
         print("Data Loaded:")
-        df.show()
-
+        df.select('c_id', 'name', 'score', 'passed').write.format('console').option('truncate', 'false').save()
+        
         # Add processing logic
-        df = df.withColumn("passed", df["score"] > 80)
-
+        df = df.withColumn('passed', df['score'] > 80)
+        
         print("\nProcessed Data:")
-        df.show()
+        df.select('c_id', 'name', 'score', 'passed').write.format('console').option('truncate', 'false').save()
     except Exception as e:
         print(f"An error occurred: {e}")
 

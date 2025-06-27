@@ -1,22 +1,12 @@
 from pyspark.sql import SparkSession
-import pandas as pd
-
-def create_spark_session():
-    """
-    Create a PySpark SparkSession instance for data processing.
-
-    Returns:
-        SparkSession: A SparkSession instance.
-    """
-    return SparkSession.builder.appName('DataLoader').getOrCreate()
-
+import pandas as pd  # Not used anymore, consider removing this import
 
 def load_data():
     """
-    Load data from a simulated CSV or database.
+    Load data from a simulated CSV or database using PySpark's SparkSession.
 
     Returns:
-        DataFrame: A PySpark DataFrame containing the loaded data.
+        spark_df (pyspark.sql.dataframe.DataFrame): A DataFrame containing the loaded data.
     """
     try:
         # Simulate loading data from a CSV or database
@@ -25,7 +15,7 @@ def load_data():
             "name": ["Alice", "Bob", "Charlie"],
             "score": [95, 88, 76]
         }
-        spark = create_spark_session()
+        spark = SparkSession.builder.appName('data_loader').getOrCreate()
         df = spark.createDataFrame(data)
         return df
     except Exception as e:

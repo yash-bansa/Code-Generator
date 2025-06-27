@@ -14,11 +14,16 @@ from .code_identifier_agent import CodeIdentifierAgent
 from .code_generator_agent import CodeGeneratorAgent
 from .code_validator_agent import CodeValidatorAgent
 from .QueryRephraseAgent import QueryRephraseAgent
+from .delta_analyzer_agent import DeltaAnalyzerAgent
+from .master_planner_agent import MasterPlannerAgent
+
 
 __all__ = [
     "ParserAgent",
     "CodeIdentifierAgent", 
     "CodeGeneratorAgent",
     "CodeValidatorAgent",
-    "QueryRephraseAgent"
+    "QueryRephraseAgent",
+    "DeltaAnalyzerAgent",
+    "MasterPlannerAgent",
 ]
