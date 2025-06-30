@@ -1,0 +1,21 @@
+langgraph
+python-dotenv
+requests
+sqlalchemy
+pytest # for testing
+black  # for code formatting
+flake8  # for linting 
+langgraph
+langchain
+langchain-community
+langchain-core
+openai
+python-dotenv
+pydantic
+typing-extensions
+requests
+pathlib
+json5
+autopep8
+black
+streamlit
