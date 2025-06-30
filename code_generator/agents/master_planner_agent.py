@@ -7,6 +7,7 @@ from utils.file_handler import FileHandler
 from utils.llm_client import llm_client
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 class MasterPlannerAgent:
     def __init__(self):
@@ -122,6 +123,8 @@ Return JSON:
     }}
   ]
 }}
+
+Pease do not add any extra information in output make it in proper json no comments or any extra info be accurate with the output format.
 """
         try:
             response = await llm_client.chat_completion(
@@ -129,32 +132,46 @@ Return JSON:
                 system_prompt=self.system_prompt
             )
 
-            if not response:
-                logger.warning(f"[LLM] Empty response for file: {file_path}")
+            if not response or len(response.strip()) < 10:
+                logger.warning(f"[LLM] Empty or too short response for file: {file_path}")
                 return self._default_analysis()
 
             cleaned = self._clean_json_response(response)
+
+            if not cleaned.strip().startswith("{"):
+                logger.warning(f"[LLM] Non-JSON response for {file_path.name}. Raw output: {response[:200]}")
+                return self._default_analysis()
+
             return json.loads(cleaned)
 
         except json.JSONDecodeError as jde:
-            logger.warning(f"⚠️ JSON decode error for file {file_path.name}: {jde}")
+            logger.warning(
+                f"⚠️ JSON decode error for file {file_path.name}: {jde}. Raw response:\n{response[:300]}"
+            )
         except Exception as e:
             logger.error(f"❌ LLM analysis failed for {file_path.name}: {e}")
 
         return self._default_analysis()
 
     def _clean_json_response(self, response: str) -> str:
-        """Extract and clean JSON content from LLM response."""
+        """Extract and clean JSON content from LLM response, even if wrapped in extra text."""
+        # Step 1: Extract JSON block if wrapped in triple backticks
         json_pattern = r"```(?:json)?(.*?)```"
         matches = re.findall(json_pattern, response, re.DOTALL)
         if matches:
             response = matches[0].strip()
+        else:
+            # Step 2: Try to extract the first curly-brace JSON object manually
+            json_start = response.find("{")
+            if json_start != -1:
+                response = response[json_start:]
 
-        response = response.replace('\n', '')
+        # Step 3: Normalize booleans and remove trailing commas
         response = response.replace("True", "true").replace("False", "false")
         response = re.sub(r",\s*([}\]])", r"\1", response)
 
         return response.strip()
+
 
     def _default_analysis(self) -> Dict[str, Any]:
         """Fallback structure when LLM fails or returns invalid data."""

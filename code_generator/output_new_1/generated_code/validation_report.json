@@ -8,9 +8,9 @@
       "warnings": [],
       "suggestions": [],
       "metrics": {
-        "lines_of_code": 32,
-        "blank_lines": 7,
-        "comment_lines": 4,
+        "lines_of_code": 25,
+        "blank_lines": 3,
+        "comment_lines": 1,
         "functions_count": 1,
         "classes_count": 0,
         "imports_count": 5,
@@ -24,10 +24,10 @@
       "warnings": [],
       "suggestions": [],
       "metrics": {
-        "lines_of_code": 25,
-        "blank_lines": 5,
+        "lines_of_code": 33,
+        "blank_lines": 7,
         "comment_lines": 1,
-        "functions_count": 1,
+        "functions_count": 2,
         "classes_count": 0,
         "imports_count": 4,
         "complexity_estimate": "low"
