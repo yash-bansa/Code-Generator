@@ -1,4 +1,4 @@
-import requests
+import httpx
 import json
 from typing import Dict, Any, Optional, List
 from config.settings import settings
@@ -23,16 +23,13 @@ class LMStudioClient:
             "Content-Type": "application/json"
         }
 
-    def chat_completion(
+    async def chat_completion(
         self,
         messages: List[Dict[str, str]],
         temperature: float = None,
         max_tokens: int = None,
         system_prompt: str = None
     ) -> Optional[str]:
-        """
-        Sends a chat completion request to the configured LLM provider.
-        """
         if system_prompt:
             messages = [{"role": "system", "content": system_prompt}] + messages
 
@@ -45,43 +42,37 @@ class LMStudioClient:
         }
 
         try:
-            print(f"[LLMClient] Requesting {self.provider} model: {self.model_name}")
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=self.headers,
-                json=payload,
-                timeout=settings.TIMEOUT_SECONDS
-            )
-            response.raise_for_status()
-            result = response.json()
-            return result["choices"][0]["message"]["content"]
+            async with httpx.AsyncClient(timeout=settings.TIMEOUT_SECONDS) as client:
+                print(f"[LLMClient] Requesting {self.provider} model: {self.model_name}")
+                response = await client.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=self.headers,
+                    json=payload
+                )
+                response.raise_for_status()
+                result = response.json()
+                return result["choices"][0]["message"]["content"]
 
-        except requests.exceptions.RequestException as e:
-            print(f"Error communicating with {self.provider}: {e}")
-            return None
+        except httpx.HTTPError as e:
+            print(f"HTTP error with {self.provider}: {e}")
         except (KeyError, IndexError) as e:
-            print(f"Error parsing {self.provider} response: {e}")
-            return None
+            print(f"Parsing error: {e}")
+        return None
 
-    def simple_completion(self, prompt: str, system_prompt: str = None) -> Optional[str]:
-        """
-        Simple wrapper to make a single-prompt request.
-        """
+    async def simple_completion(self, prompt: str, system_prompt: str = None) -> Optional[str]:
         messages = [{"role": "user", "content": prompt}]
-        return self.chat_completion(messages, system_prompt=system_prompt)
+        return await self.chat_completion(messages, system_prompt=system_prompt)
 
-    def test_connection(self) -> bool:
-        """
-        Test if the model server is reachable.
-        """
+    async def test_connection(self) -> bool:
         try:
-            test_url = f"{self.base_url}/models" if self.provider == "lmstudio" else f"{self.base_url}/models"
-            response = requests.get(test_url, headers=self.headers, timeout=5)
-            return response.status_code == 200
+            async with httpx.AsyncClient(timeout=5) as client:
+                test_url = f"{self.base_url}/models"
+                response = await client.get(test_url, headers=self.headers)
+                return response.status_code == 200
         except Exception as e:
-            print(f"[LLMClient] Connection test failed: {e}")
+            print(f"[LLMClient] Async connection test failed: {e}")
             return False
 
 
-# Global instance
+# Global async instance
 llm_client = LMStudioClient()

@@ -1,12 +1,12 @@
 from pyspark.sql import SparkSession
-import pandas as pd  # Not used anymore, consider removing this import
+import pandas as pd
 
 def load_data():
     """
-    Load data from a simulated CSV or database using PySpark's SparkSession.
+    Load data from a simulated CSV or database and apply transformations.
 
     Returns:
-        spark_df (pyspark.sql.dataframe.DataFrame): A DataFrame containing the loaded data.
+        Spark DataFrame: Transformed data with a 'passed' column.
     """
     try:
         # Simulate loading data from a CSV or database
@@ -15,9 +15,18 @@ def load_data():
             "name": ["Alice", "Bob", "Charlie"],
             "score": [95, 88, 76]
         }
-        spark = SparkSession.builder.appName('data_loader').getOrCreate()
+        
+        # Create a SparkSession for scalable data processing
+        spark = SparkSession.builder.appName('DataLoader').getOrCreate()
+        
+        # Load data into a Spark DataFrame
         df = spark.createDataFrame(data)
+        
+        # Apply 'mark_passed_students' transformation using PySpark DataFrames
+        df = df.withColumn('passed', df['score'] > 80)
+        
         return df
+    
     except Exception as e:
         print(f"An error occurred: {e}")
         return None

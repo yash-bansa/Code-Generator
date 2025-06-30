@@ -1,80 +1,118 @@
 # agents/delta_analyzer_agent.py
 
+import json
+import re
+import logging
 from typing import List, Dict, Any
 from pathlib import Path
+
 from utils.file_handler import FileHandler
 from utils.llm_client import llm_client
-import json, re
+
+logger = logging.getLogger(__name__)
+
 
 class DeltaAnalyzerAgent:
     def __init__(self):
-        self.system_prompt = """You are a Modification Planner Agent. Your task is to analyze identified files and generate precise code change plans..."""
+        self.system_prompt = """You are a Delta Analyzer Agent specializing in precise code modification planning.
 
-    def suggest_file_changes(self, target_file: Dict[str, Any], parsed_config: Dict[str, Any]) -> Dict[str, Any]:
-        file_path = target_file['file_path']
-        file_content = FileHandler.read_file(Path(file_path))
+ROLE:
+Analyze target files and generate detailed, actionable code change plans based on configuration requirements.
+
+ANALYSIS FOCUS:
+1. Identify exact code locations requiring changes
+2. Generate specific code modifications (add/modify/delete)
+3. Determine import dependencies and requirements
+4. Suggest testing approaches for changes
+5. Identify potential risks and issues
+
+MODIFICATION TYPES:
+- add: Insert new code (functions, classes, variables)
+- modify: Change existing code with specific replacements
+- delete: Remove obsolete or conflicting code
+
+TARGET TYPES:
+- function: Function definitions and calls
+- class: Class definitions and methods
+- import: Import statements and dependencies
+- variable: Variable assignments and configurations
+- comment: Documentation and comments
+
+RESPONSE REQUIREMENTS:
+- Provide line numbers when possible
+- Include both old and new code for modifications
+- Explain the reasoning for each change
+- Suggest comprehensive testing approaches
+- Identify potential breaking changes
+
+EXPECTED JSON FORMAT:
+{
+  "modifications": [
+    {
+      "action": "add|modify|delete",
+      "target_type": "function|class|import|variable|comment",
+      "target_name": "name",
+      "line_number": 0,
+      "old_code": "code before change (if applicable)",
+      "new_code": "code after change",
+      "explanation": "why this change is required"
+    }
+  ],
+  "new_dependencies": [],
+  "testing_suggestions": [],
+  "potential_issues": []
+}
+
+Return ONLY valid JSON with NO additional text or explanations."""
+
+    async def suggest_file_changes(self, target_file: Dict[str, Any], parsed_config: Dict[str, Any]) -> Dict[str, Any]:
+        file_path = target_file.get('file_path')
+        if not file_path:
+            logger.warning("[DeltaAnalyzerAgent] Missing file_path in target_file")
+            return {"modifications": []}
+
+        try:
+            file_content = FileHandler.read_file(Path(file_path))
+        except Exception as e:
+            logger.error(f"[DeltaAnalyzerAgent] Failed to read file {file_path}: {e}")
+            return {"modifications": []}
 
         prompt = f"""
 Generate detailed code modification suggestions for this file:
 
-Only return a **single valid JSON object** — no explanations or additional text. Use double quotes only. All values must be JSON-compliant.
-
-
 File Path: {file_path}
-Current Analysis: {json.dumps(target_file['analysis'], indent=2)}
+Current Analysis: {json.dumps(target_file.get('analysis', {}), indent=2)}
 Configuration: {json.dumps(parsed_config, indent=2)}
 
 Current File Content:
 {file_content}
 
-Provide specific, actionable suggestions:
-1. Exact code changes needed
-2. New functions/classes to add
-3. Imports to add/modify
-4. Configuration parameters to update
-5. Error handling improvements
-
-Return JSON with detailed suggestions:
-{{
-    "modifications": [
-        {{
-            "action": "add|modify|delete",
-            "target_type": "function|class|import|variable",
-            "target_name": "specific name",
-            "line_number": 0,
-            "old_code": "existing code if modifying",
-            "new_code": "new/modified code",
-            "explanation": "why this change is needed"
-        }}
-    ],
-    "new_dependencies": [],
-    "testing_suggestions": [],
-    "potential_issues": []
-}}
-
-⚠️ Return only the above JSON structure, with valid keys, valid types, and no extra text.
+Return ONLY a valid JSON object with detailed code changes as described in the expected format.
 """
+
         try:
-            response = llm_client.chat_completion(
+            response = await llm_client.chat_completion(
                 messages=[{"role": "user", "content": prompt}],
                 system_prompt=self.system_prompt
             )
 
             if response:
                 cleaned_response = self._clean_json_response(response)
+                parsed = json.loads(cleaned_response)
                 return {
-                    **json.loads(cleaned_response),
+                    **parsed,
                     "file_path": file_path,
                     "timestamp": FileHandler.get_file_info(Path(file_path)).get('modified', 0)
                 }
 
-            return {"modifications": []}
-
+        except json.JSONDecodeError as je:
+            logger.warning(f"[DeltaAnalyzerAgent] JSON decode error for {file_path}: {je}")
         except Exception as e:
-            print(f"Error generating suggestions for {file_path}: {e}")
-            return {"modifications": []}
+            logger.error(f"[DeltaAnalyzerAgent] Error analyzing file {file_path}: {e}")
 
-    def create_modification_plan(self, target_files: List[Dict[str, Any]], parsed_config: Dict[str, Any]) -> Dict[str, Any]:
+        return {"modifications": []}
+
+    async def create_modification_plan(self, target_files: List[Dict[str, Any]], parsed_config: Dict[str, Any]) -> Dict[str, Any]:
         plan = {
             "files_to_modify": [],
             "execution_order": [],
@@ -85,10 +123,10 @@ Return JSON with detailed suggestions:
         }
 
         for target_file in target_files:
-            suggestions = self.suggest_file_changes(target_file, parsed_config)
+            suggestions = await self.suggest_file_changes(target_file, parsed_config)
             plan["files_to_modify"].append({
                 "file_path": target_file['file_path'],
-                "priority": target_file['priority'],
+                "priority": target_file.get('priority', 'medium'),
                 "suggestions": suggestions
             })
 
@@ -104,33 +142,30 @@ Return JSON with detailed suggestions:
 
     def _determine_execution_order(self, files_to_modify: List[Dict[str, Any]]) -> List[str]:
         order = []
+        priority_keywords = ['config', 'util', 'load', 'input', 'process', 'transform', 'output', 'write']
 
-        for phase in ['config', 'util', 'load', 'input', 'process', 'transform', 'output', 'write']:
+        for keyword in priority_keywords:
             for file_info in files_to_modify:
-                file_path = Path(file_info['file_path'])
-                if phase in file_path.name.lower() and file_info['file_path'] not in order:
-                    order.append(file_info['file_path'])
+                file_path = Path(file_info["file_path"])
+                if keyword in file_path.name.lower() and file_info["file_path"] not in order:
+                    order.append(file_info["file_path"])
 
         for file_info in files_to_modify:
-            if file_info['file_path'] not in order:
-                order.append(file_info['file_path'])
+            if file_info["file_path"] not in order:
+                order.append(file_info["file_path"])
 
         return order
 
     def _clean_json_response(self, response: str) -> str:
         """Extract and clean JSON-like content from LLM response."""
-        # Step 1: Extract content between triple backticks if present
         json_pattern = r"```(?:json)?(.*?)```"
         matches = re.findall(json_pattern, response, re.DOTALL)
-        
+
         if matches:
             response = matches[0].strip()
-        
-        # Step 2: Try fixing common JSON errors
+
         response = response.replace('\n', '')
         response = response.replace("True", "true").replace("False", "false")
-        
-        # Remove trailing commas (JSON does not support them)
         response = re.sub(r",\s*([}\]])", r"\1", response)
 
-        return response
+        return response.strip()

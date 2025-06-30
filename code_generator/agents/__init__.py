@@ -9,8 +9,7 @@ Contains agents for the code generation pipeline:
 - CodeValidatorAgent: Validates and fixes generated code
 """
 
-from .parser_agent import ParserAgent
-from .code_identifier_agent import CodeIdentifierAgent  
+from .parser_agent import ParserAgent  
 from .code_generator_agent import CodeGeneratorAgent
 from .code_validator_agent import CodeValidatorAgent
 from .QueryRephraseAgent import QueryRephraseAgent
@@ -20,7 +19,6 @@ from .master_planner_agent import MasterPlannerAgent
 
 __all__ = [
     "ParserAgent",
-    "CodeIdentifierAgent", 
     "CodeGeneratorAgent",
     "CodeValidatorAgent",
     "QueryRephraseAgent",
