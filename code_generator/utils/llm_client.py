@@ -1,78 +1,76 @@
-import httpx
-import json
+import openai
+import logging
 from typing import Dict, Any, Optional, List
 from config.settings import settings
 
+logger = logging.getLogger(__name__)
+
 class LMStudioClient:
     def __init__(self):
-        self.provider = settings.LM_CLIENT_PROVIDER.lower()
-
-        if self.provider == "groq":
-            self.base_url = settings.GROQ_BASE_URL
-            self.api_key = settings.GROQ_API_KEY
-            self.model_name = settings.GROQ_MODEL_NAME
-        elif self.provider == "lmstudio":
-            self.base_url = settings.LM_STUDIO_BASE_URL
-            self.api_key = settings.LM_STUDIO_API_KEY
-            self.model_name = settings.LM_STUDIO_MODEL_NAME
-        else:
-            raise ValueError(f"Unsupported LM provider: {self.provider}")
-
-        self.headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
+        # Get current provider configuration
+        self.config = settings.get_current_provider_config()
+        self.provider = self.config["provider"]
+        self.base_url = self.config["base_url"]
+        self.api_key = self.config["api_key"]
+        self.model_name = self.config["model_name"]
+        
+        # Validate configuration
+        validation = settings.validate_configuration()
+        if not validation["valid"]:
+            raise ValueError(f"Configuration errors: {validation['errors']}")
+        
+        # Initialize OpenAI client
+        if self.provider in ["tiger", "lmstudio"]:
+            self.client = openai.OpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url
+            )
+        elif self.provider == "groq":
+            from groq import Groq
+            self.client = Groq(api_key=self.api_key)
+        
+        logger.info(f"✅ {self.provider.upper()} client initialized")
+        logger.info(f"   Model: {self.model_name}")
 
     async def chat_completion(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict[str, str]], 
         temperature: float = None,
         max_tokens: int = None,
         system_prompt: str = None
     ) -> Optional[str]:
+        """Make chat completion request"""
+        
         if system_prompt:
             messages = [{"role": "system", "content": system_prompt}] + messages
-
-        payload = {
-            "model": self.model_name,
-            "messages": messages,
-            "temperature": temperature or settings.TEMPERATURE,
-            "max_tokens": max_tokens or settings.MAX_TOKENS,
-            "stream": False
-        }
-
+        
         try:
-            async with httpx.AsyncClient(timeout=settings.TIMEOUT_SECONDS) as client:
-                print(f"[LLMClient] Requesting {self.provider} model: {self.model_name}")
-                response = await client.post(
-                    f"{self.base_url}/chat/completions",
-                    headers=self.headers,
-                    json=payload
-                )
-                response.raise_for_status()
-                result = response.json()
-                return result["choices"][0]["message"]["content"]
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                temperature=temperature or settings.TEMPERATURE,
+                max_tokens=max_tokens or settings.MAX_TOKENS
+            )
+            
+            return response.choices[0].message.content
+            
+        except Exception as e:
+            logger.error(f"❌ {self.provider.upper()} API error: {e}")
+            return None
 
-        except httpx.HTTPError as e:
-            print(f"HTTP error with {self.provider}: {e}")
-        except (KeyError, IndexError) as e:
-            print(f"Parsing error: {e}")
-        return None
+    async def test_connection(self) -> bool:
+        """Test connection"""
+        try:
+            result = await self.simple_completion("Hello", "You are a test assistant.")
+            return bool(result)
+        except Exception as e:
+            logger.error(f"Connection test failed: {e}")
+            return False
 
     async def simple_completion(self, prompt: str, system_prompt: str = None) -> Optional[str]:
+        """Simple completion"""
         messages = [{"role": "user", "content": prompt}]
         return await self.chat_completion(messages, system_prompt=system_prompt)
 
-    async def test_connection(self) -> bool:
-        try:
-            async with httpx.AsyncClient(timeout=5) as client:
-                test_url = f"{self.base_url}/models"
-                response = await client.get(test_url, headers=self.headers)
-                return response.status_code == 200
-        except Exception as e:
-            print(f"[LLMClient] Async connection test failed: {e}")
-            return False
-
-
-# Global async instance
+# Global instance
 llm_client = LMStudioClient()
