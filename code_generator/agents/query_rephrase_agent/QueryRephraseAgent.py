@@ -1,42 +1,24 @@
 import logging
-from typing import Optional
 import json
+from pathlib import Path
+from typing import Optional
 from pydantic import ValidationError
 from utils.llm_client import llm_client
 from config.agents_io import QueryEnhancerInput, QueryEnhancerOutput
+import yaml
 
 logger = logging.getLogger(__name__)
 
 class QueryRephraserAgent:
     def __init__(self):
-        self.system_prompt = """You are a Query Rephraser Agent in a multi-agent system for developer task generation.
-
-ROLE:
-- Refine the user's intent into a clear developer task (one line).
-- Assess if it contains enough information for configuration parsing.
-- Suggest 1–3 improvements if information is vague or missing.
-
-SATISFACTION CHECKLIST:
-✓ Is the input source clear? (e.g., CSV, API, Database)
-✓ Is the output destination defined? (e.g., Excel, API response, dashboard)
-✓ Is the task meaningful? (e.g., extract, transform, visualize, serve, monitor)
-
-BAD EXAMPLES:
-- "Do something with logs" → Suggest: what source? what to extract? output format?
-- "Make a report" → Suggest: report on what? from where? in what format?
-
-GOOD EXAMPLES:
-- "Extract data from MongoDB and store as a cleaned CSV file"
-- "Build an API to return customer orders from PostgreSQL"
-- "Generate a dashboard from JSON files to visualize sales trends"
-
-ONLY RETURN JSON in this format:
-{
-  "developer_task": "clarified one-line task",
-  "is_satisfied": true or false,
-  "suggestions": ["...", "..."]
-}
-"""
+        config_path = Path(__file__).parent / "query_rephrase_config.yaml"
+        try:
+            with open(config_path , "r") as f:
+                config = yaml.safe_load(f)
+            self.system_prompt = config["system_prompt"]
+        except Exception as e:
+            logger.error(f"[QueryRephraserAgent] Failed to load config: {e}")
+            self.system_prompt = "You are a Query Rephraser Agent. (default fallback prompt)"
 
     async def enhance_query(self, input_data: QueryEnhancerInput) -> QueryEnhancerOutput:
         try:
@@ -57,6 +39,8 @@ Return JSON with rephrased developer task, satisfaction flag, and any suggestion
             if response:
                 cleaned = self._extract_json(response)
                 parsed = QueryEnhancerOutput.model_validate_json(cleaned)
+                parsed.success = True
+                parsed.message = "LLM success"
                 return parsed
 
         except (ValidationError, json.JSONDecodeError) as e:
@@ -78,22 +62,7 @@ Return JSON with rephrased developer task, satisfaction flag, and any suggestion
                 message="Unexpected LLM error"
             )
 
-    def _fallback_response(self, user_query: str) -> QueryEnhancerOutput:
-        """Return a default response when LLM fails or input is unclear"""
-        return QueryEnhancerOutput(
-            developer_task=user_query.strip() or "Unclear task",
-            is_satisfied=False,
-            suggestions=[
-                "Please include a clear goal (e.g., extract, visualize, automate)",
-                "Mention input format/source (CSV, API, DB, etc.)",
-                "Specify what output/result you expect (report, transformed file, dashboard)"
-            ],
-            success=False,
-            message="Fallback used due to LLM failure"
-        )
-
     def _extract_json(self, response: str) -> str:
-        """Extract JSON block from LLM response if inside triple backticks"""
         if "```json" in response:
             start = response.find("```json") + 7
             end = response.find("```", start)

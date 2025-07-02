@@ -1,25 +1,24 @@
 import logging
 from typing import Optional
+import json
+import yaml
+from pathlib import Path
+from pydantic import ValidationError
 from utils.llm_client import llm_client
-from config.agents_io import CommunicationInput, CommunicationOutput  
+from config.agents_io import CommunicationInput, CommunicationOutput
 
 logger = logging.getLogger(__name__)
 
 class CommunicationAgent:
     def __init__(self):
-        self.system_prompt = """You are a Communication Agent in a multi-agent code generation system.
-
-Your job is to extract the user's core development intent from a conversation, including vague or incomplete instructions.
-
-Instructions:
-- Consider the entire conversation history as context.
-- Identify what the user is trying to accomplish (their intent).
-- Return two fields: 
-    - 'core_intent' = the main dev task in one sentence
-    - 'context_notes' = relevant prior conversation details that shaped this intent
-
-Do not return implementation details or full solutions. Just clarify what the user *wants to do*.
-"""
+        config_path = Path(__file__).parent / "communication_config.yaml"
+        try:
+            with open(config_path , "r") as f:
+                config = yaml.safe_load(f)
+            self.system_prompt = config["system_prompt"]
+        except Exception as e:
+            logger.error(f"[CommunicationAgent] Failed to load system prompt: {e}")
+            self.system_prompt = "You are a communication Agent. (default fallback prompt)"
 
     async def extract_intent(self, input_data: CommunicationInput) -> CommunicationOutput:
         try:
@@ -44,15 +43,16 @@ Return as JSON object.
                 parsed = CommunicationOutput.model_validate_json(cleaned)
                 return parsed
 
+        except (ValidationError, json.JSONDecodeError) as e:
+            logger.warning(f"[CommunicationAgent] Validation/Parse error: {e}")
         except Exception as e:
-            logger.warning(f"[CommunicationAgent] Error extracting intent: {e}")
+            logger.error(f"[CommunicationAgent] LLM error: {e}")
 
-        # fallback
         return CommunicationOutput(
             core_intent=input_data.user_query.strip(),
             context_notes="",
             success=False,
-            message="Failed to extract intent from conversation"
+            message="LLM failed to extract intent"
         )
 
     def _extract_json(self, response: str) -> str:

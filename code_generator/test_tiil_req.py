@@ -2,8 +2,7 @@ import asyncio
 import sys
 import logging
 from typing import Dict, Any, List
-from agents.communication_agent import CommunicationAgent
-from agents.QueryRephraseAgent import QueryRephraserAgent
+from agents import CommunicationAgent,QueryRephraserAgent
 from config.agents_io import CommunicationOutput, CommunicationInput, QueryEnhancerInput, QueryEnhancerOutput
 
 # Logging Setup
