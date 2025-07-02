@@ -1,25 +1,33 @@
 from pyspark.sql import SparkSession
-import pandas as pd
 
-def load_data(spark_session):
+def load_data():
     """
-    Load data from a simulated CSV or database.
+    Load data into a PySpark DataFrame.
 
-    Args:
-        spark_session (SparkSession): The SparkSession instance for ETL data processing.
+    This function initializes a SparkSession, creates in-memory data,
+    defines the schema, and loads the data into a PySpark DataFrame.
 
     Returns:
-        DataFrame: A PySpark DataFrame containing the loaded data.
+        pyspark.sql.DataFrame: A PySpark DataFrame containing the data.
     """
     try:
-        # Simulate loading data from a CSV or database
-        data = {
-            "c_id": [1, 2, 3],
-            "name": ["Alice", "Bob", "Charlie"],
-            "score": [95, 88, 76]
-        }
-        df = spark_session.createDataFrame(data)
+        # Initialize SparkSession
+        spark = SparkSession.builder.appName("DataLoader").getOrCreate()
+        
+        # Create data in-memory
+        data = [
+            (1, "Alice", 95),
+            (2, "Bob", 88),
+            (3, "Charlie", 76)
+        ]
+        
+        # Define schema
+        schema = ["c_id", "name", "score"]
+        
+        # Create DataFrame
+        df = spark.createDataFrame(data, schema)
         return df
     except Exception as e:
-        print(f"An error occurred: {e}")
-        return None
+        # Handle any exceptions that occur during data loading
+        print(f"An error occurred while loading data: {e}")
+        raise

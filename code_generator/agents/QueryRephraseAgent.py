@@ -1,123 +1,105 @@
-import json
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Optional
+import json
+from pydantic import ValidationError
 from utils.llm_client import llm_client
-import jsonschema
+from config.agents_io import QueryEnhancerInput, QueryEnhancerOutput
 
 logger = logging.getLogger(__name__)
 
-class QueryRephraseAgent:
+class QueryRephraserAgent:
     def __init__(self):
-        self.system_prompt = """You are a Query Rephrase Agent in a multi-agent code generation system.
+        self.system_prompt = """You are a Query Rephraser Agent in a multi-agent system for developer task generation.
 
-ROLE: Transform user queries into actionable developer tasks and assess readiness for configuration parsing.
+ROLE:
+- Refine the user's intent into a clear developer task (one line).
+- Assess if it contains enough information for configuration parsing.
+- Suggest 1–3 improvements if information is vague or missing.
 
-PROCESS:
-1. Extract core intent from user query and conversation history
-2. Rephrase into a single, clear developer task (one sentence)
-3. Evaluate if sufficient information exists for configuration parsing (NOT full code generation)
-4. Provide 1-3 specific, actionable suggestions if incomplete
+SATISFACTION CHECKLIST:
+✓ Is the input source clear? (e.g., CSV, API, Database)
+✓ Is the output destination defined? (e.g., Excel, API response, dashboard)
+✓ Is the task meaningful? (e.g., extract, transform, visualize, serve, monitor)
 
-SATISFACTION CRITERIA (for configuration parsing):
-✓ Clear development goal (ETL, API integration, dashboard, data analysis, automation, report generation)
-✓ Defined input source (database, API, CSV file, JSON, manual input, etc.)
-✓ Defined output target (database, file, dashboard, API response, email, etc.)
-✓ Basic processing requirements (if applicable: filtering, aggregation, transformation)
+BAD EXAMPLES:
+- "Do something with logs" → Suggest: what source? what to extract? output format?
+- "Make a report" → Suggest: report on what? from where? in what format?
 
-Note: Do NOT require specific file names, field names, or detailed paths - just clear intent and direction.
+GOOD EXAMPLES:
+- "Extract data from MongoDB and store as a cleaned CSV file"
+- "Build an API to return customer orders from PostgreSQL"
+- "Generate a dashboard from JSON files to visualize sales trends"
 
-RESPONSE FORMAT (return ONLY valid JSON):
+ONLY RETURN JSON in this format:
 {
-  "developer_task": "Single clear sentence describing the task",
-  "is_satisfied": true | false,
-  "suggestions": ["specific improvement 1", "specific improvement 2"]
+  "developer_task": "clarified one-line task",
+  "is_satisfied": true or false,
+  "suggestions": ["...", "..."]
 }
-
-EXAMPLES:
-✓ Good (satisfied): 
-- "Create ETL pipeline to extract customer data from PostgreSQL and generate daily sales reports in Excel"
-- "Build API endpoint to fetch user data from database and return JSON response"
-- "Develop dashboard to visualize sales metrics from CSV files"
-
-✗ Poor (not satisfied):
-- "Do something with data" → suggest: specify data source, processing type, output format
-- "Make a report" → suggest: specify data source, report content, output format
-- "Process files" → suggest: specify file type, processing requirements, output destination
-
-Focus on clarity of intent rather than technical implementation details."""
-
-        self.schema = {
-            "type": "object",
-            "properties": {
-                "developer_task": {"type": "string"},
-                "is_satisfied": {"type": "boolean"},
-                "suggestions": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "default": []
-                }
-            },
-            "required": ["developer_task", "is_satisfied"]
-        }
-
-    async def rephrase_query(
-        self,
-        user_query: str,
-        conversation_history: Optional[List[str]] = None
-    ) -> Optional[Dict[str, Any]]:
-        if not user_query or not user_query.strip():
-            return self._create_fallback_response(user_query)
-
-        context = "\n".join(conversation_history) if conversation_history else "No prior context provided."
-
-        prompt = f"""
-User Query:
-{user_query}
-
-Previous Conversation Context:
-{context}
-
-Return a single-line developer task, a satisfaction flag (is_satisfied), and suggestions if the query is incomplete.
 """
 
+    async def enhance_query(self, input_data: QueryEnhancerInput) -> QueryEnhancerOutput:
         try:
+            prompt = f"""User Intent:
+{input_data.core_intent}
+
+Conversation Context:
+{input_data.context_notes or 'None'}
+
+Return JSON with rephrased developer task, satisfaction flag, and any suggestions.
+"""
+
             response = await llm_client.chat_completion(
                 messages=[{"role": "user", "content": prompt}],
                 system_prompt=self.system_prompt
             )
 
             if response:
-                cleaned = self._clean_json_response(response)
-                parsed = json.loads(cleaned)
-                jsonschema.validate(instance=parsed, schema=self.schema)
+                cleaned = self._extract_json(response)
+                parsed = QueryEnhancerOutput.model_validate_json(cleaned)
                 return parsed
 
-        except (json.JSONDecodeError, jsonschema.ValidationError) as err:
-            logger.warning(f"[QueryRephraseAgent] Parse or validation error: {err}")
+        except (ValidationError, json.JSONDecodeError) as e:
+            logger.warning(f"[QueryRephraserAgent] Validation or JSON error: {e}")
+            return QueryEnhancerOutput(
+                developer_task=input_data.core_intent.strip(),
+                is_satisfied=False,
+                suggestions=["LLM returned invalid format."],
+                success=False,
+                message="Validation or JSON parsing error"
+            )
         except Exception as e:
-            logger.error(f"[QueryRephraseAgent] Unexpected error: {e}")
+            logger.error(f"[QueryRephraserAgent] Unexpected LLM error: {e}")
+            return QueryEnhancerOutput(
+                developer_task=input_data.core_intent.strip(),
+                is_satisfied=False,
+                suggestions=["Unexpected system error."],
+                success=False,
+                message="Unexpected LLM error"
+            )
 
-        return self._create_fallback_response(user_query)
+    def _fallback_response(self, user_query: str) -> QueryEnhancerOutput:
+        """Return a default response when LLM fails or input is unclear"""
+        return QueryEnhancerOutput(
+            developer_task=user_query.strip() or "Unclear task",
+            is_satisfied=False,
+            suggestions=[
+                "Please include a clear goal (e.g., extract, visualize, automate)",
+                "Mention input format/source (CSV, API, DB, etc.)",
+                "Specify what output/result you expect (report, transformed file, dashboard)"
+            ],
+            success=False,
+            message="Fallback used due to LLM failure"
+        )
 
-    def _clean_json_response(self, response: str) -> str:
-        """Clean LLM response to extract valid JSON"""
+    def _extract_json(self, response: str) -> str:
+        """Extract JSON block from LLM response if inside triple backticks"""
         if "```json" in response:
             start = response.find("```json") + 7
             end = response.find("```", start)
-            response = response[start:end].strip()
+            return response[start:end].strip()
         elif "```" in response:
             start = response.find("```") + 3
             end = response.find("```", start)
-            response = response[start:end].strip()
+            return response[start:end].strip()
         return response.strip()
-
-    def _create_fallback_response(self, user_query: str) -> Dict[str, Any]:
-        """Create consistent fallback response"""
-        return {
-            "developer_task": user_query.strip() if user_query else "",
-            "is_satisfied": False,
-            "suggestions": [
-                "Please specify your task clearly, including input source and output format.",
-                "Example: 'Extract data from MySQL database and create Excel reports'"
-            ]
-        }

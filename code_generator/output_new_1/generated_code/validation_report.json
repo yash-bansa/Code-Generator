@@ -8,12 +8,12 @@
       "warnings": [],
       "suggestions": [],
       "metrics": {
-        "lines_of_code": 25,
-        "blank_lines": 3,
-        "comment_lines": 1,
+        "lines_of_code": 33,
+        "blank_lines": 6,
+        "comment_lines": 5,
         "functions_count": 1,
         "classes_count": 0,
-        "imports_count": 5,
+        "imports_count": 2,
         "complexity_estimate": "low"
       }
     },
@@ -24,12 +24,12 @@
       "warnings": [],
       "suggestions": [],
       "metrics": {
-        "lines_of_code": 33,
-        "blank_lines": 7,
-        "comment_lines": 1,
+        "lines_of_code": 52,
+        "blank_lines": 13,
+        "comment_lines": 5,
         "functions_count": 2,
         "classes_count": 0,
-        "imports_count": 4,
+        "imports_count": 7,
         "complexity_estimate": "low"
       }
     }

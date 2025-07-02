@@ -12,16 +12,18 @@ Contains agents for the code generation pipeline:
 from .parser_agent import ParserAgent  
 from .code_generator_agent import CodeGeneratorAgent
 from .code_validator_agent import CodeValidatorAgent
-from .QueryRephraseAgent import QueryRephraseAgent
+from .QueryRephraseAgent import QueryRephraserAgent
 from .delta_analyzer_agent import DeltaAnalyzerAgent
 from .master_planner_agent import MasterPlannerAgent
+from .communication_agent import CommunicationAgent
 
 
 __all__ = [
     "ParserAgent",
     "CodeGeneratorAgent",
     "CodeValidatorAgent",
-    "QueryRephraseAgent",
+    "QueryRephraserAgent",
     "DeltaAnalyzerAgent",
     "MasterPlannerAgent",
+    "CommunicationAgent"
 ]
