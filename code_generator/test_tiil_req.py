@@ -1,11 +1,20 @@
 import asyncio
 import sys
 import logging
-from typing import Dict, Any, List
-from agents import CommunicationAgent,QueryRephraserAgent
-from config.agents_io import CommunicationOutput, CommunicationInput, QueryEnhancerInput, QueryEnhancerOutput
+from langgraph.graph import StateGraph
+from typing import List, Union
+from pydantic import BaseModel
 
-# Logging Setup
+from agents import CommunicationAgent, QueryRephraserAgent
+from config.agents_io import (
+    BotStateSchema,
+    CommunicationInput,
+    CommunicationOutput,
+    QueryEnhancerInput,
+    QueryEnhancerOutput
+)
+
+# ---------- Logging Setup ----------
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -16,82 +25,62 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ---------- BotState Definition ----------
-BotState = Dict[str, Any]
-
 # ---------- Agent Initialization ----------
 print("\n🤖 Initializing LangGraph-style Query Agents...")
-print("=" * 60)
+communication_agent = CommunicationAgent()
+query_rephraser_agent = QueryRephraserAgent()
+print("✅ Agents initialized successfully!")
 
-try:
-    communication_agent = CommunicationAgent()
-    query_rephraser_agent = QueryRephraserAgent()
-    print("✅ Agents initialized successfully!")
-except Exception as e:
-    print(f"❌ Failed to initialize agents: {e}")
-    sys.exit(1)
+# ---------- Helper to ensure correct schema ----------
+def ensure_state_schema(state: Union[dict, BaseModel]) -> BotStateSchema:
+    if isinstance(state, BotStateSchema):
+        return state
+    return BotStateSchema(**state)
 
 # ---------- LangGraph-Compatible Nodes ----------
-async def communication_node(state: BotState) -> BotState:
-    """LangGraph node: Extract core intent and context"""
-    try:
-        logger.info("🧠 Communication Node: Extracting intent...")
+async def communication_node(state: dict) -> dict:
+    state_obj = ensure_state_schema(state)
+    logger.info("🧠 Communication Node: Extracting intent...")
 
-        comm_input = CommunicationInput(
-            user_query=state["latest_query"],
-            conversation_history=state.get("user_history", [])[:-1]
-        )
-        result: CommunicationOutput = await communication_agent.extract_intent(comm_input)
+    comm_input = CommunicationInput(
+        user_query=state_obj.latest_query,
+        conversation_history=state_obj.user_history[:-1] if len(state_obj.user_history) > 1 else []
+    )
+    result: CommunicationOutput = await communication_agent.extract_intent(comm_input)
 
-        state["core_intent"] = result.core_intent
-        state["context_notes"] = result.context_notes
-        state["communication_success"] = result.success
+    state_obj.core_intent = result.core_intent
+    state_obj.context_notes = result.context_notes
+    state_obj.communication_success = result.success
 
-        logger.info(f"✅ Core Intent: {result.core_intent}")
-        logger.info(f"📝 Context Notes: {result.context_notes}")
-        return state
+    logger.info(f"✅ Core Intent: {result.core_intent}")
+    logger.info(f"📝 Context Notes: {result.context_notes}")
+    return state_obj.dict()
 
-    except Exception as e:
-        logger.error(f"❌ Communication node error: {e}")
-        state["core_intent"] = state.get("latest_query", "")
-        state["context_notes"] = f"[Error in communication processing: {str(e)}]"
-        state["communication_success"] = False
-        return state
+async def query_enhancement_node(state: dict) -> dict:
+    state_obj = ensure_state_schema(state)
+    logger.info("🔧 Query Enhancement Node: Rephrasing and validating...")
 
+    enhancer_input = QueryEnhancerInput(
+        core_intent=state_obj.core_intent,
+        context_notes=state_obj.context_notes
+    )
+    result: QueryEnhancerOutput = await query_rephraser_agent.enhance_query(enhancer_input)
 
-async def query_enhancement_node(state: BotState) -> BotState:
-    """LangGraph node: Enhance and validate developer task"""
-    try:
-        logger.info("🔧 Query Enhancement Node: Rephrasing and validating...")
+    state_obj.developer_task = result.developer_task
+    state_obj.is_satisfied = result.is_satisfied
+    state_obj.suggestions = result.suggestions
+    state_obj.enhancement_success = result.success
 
-        enhancer_input = QueryEnhancerInput(
-            core_intent=state["core_intent"],
-            context_notes=state["context_notes"]
-        )
-        result: QueryEnhancerOutput = await query_rephraser_agent.enhance_query(enhancer_input)
+    logger.info(f"🎯 Developer Task: {result.developer_task}")
+    logger.info(f"✅ Is Satisfied: {result.is_satisfied}")
+    if not result.is_satisfied:
+        logger.info("💡 Suggestions:")
+        for s in result.suggestions:
+            logger.info(f"- {s}")
 
-        state["developer_task"] = result.developer_task
-        state["is_satisfied"] = result.is_satisfied
-        state["suggestions"] = result.suggestions
-        state["enhancement_success"] = result.success
+    return state_obj.dict()
 
-        logger.info(f"🎯 Developer Task: {result.developer_task}")
-        logger.info(f"✅ Is Satisfied: {result.is_satisfied}")
-        if not result.is_satisfied:
-            logger.info("💡 Suggestions:")
-            for s in result.suggestions:
-                logger.info(f"- {s}")
-        return state
-
-    except Exception as e:
-        logger.error(f"❌ Query enhancement node error: {e}")
-        state["developer_task"] = state.get("core_intent", "")
-        state["is_satisfied"] = False
-        state["suggestions"] = [f"Error processing query: {str(e)}"]
-        state["enhancement_success"] = False
-        return state
-
-# ---------- Run LangGraph-like Flow ----------
+# ---------- Run LangGraph Flow ----------
 async def main():
     print("\nWelcome to the LangGraph Query Clarifier")
     print("=" * 60)
@@ -108,34 +97,41 @@ async def main():
             break
 
         history.append(user_query)
+        state = BotStateSchema(
+            latest_query=user_query,
+            user_history=history
+        )
 
-        # Initial State
-        state: BotState = {
-            "latest_query": user_query,
-            "user_history": history,
-            "core_intent": "",
-            "context_notes": "",
-            "developer_task": "",
-            "is_satisfied": False,
-            "suggestions": [],
-        }
+        # Build LangGraph
+        builder = StateGraph(dict)
+        builder.add_node("communication_node", communication_node)
+        builder.add_node("query_enhancement_node", query_enhancement_node)
+        builder.set_entry_point("communication_node")
+        builder.add_edge("communication_node", "query_enhancement_node")
+        builder.set_finish_point("query_enhancement_node")
+        graph = builder.compile()
 
-        # STEP 1: Communication Agent
-        state = await communication_node(state)
+        print("\n🧩 LangGraph Structure:")
+        try:
+            ascii_art = graph.get_graph().draw_ascii()
+            print(ascii_art)
+        except Exception as e:
+            logger.warning(f"⚠️ Unable to draw graph structure: {e}")
 
-        # STEP 2: Query Rephrase Agent
-        state = await query_enhancement_node(state)
+        # Run the graph
+        final_state_dict = await graph.ainvoke(state.dict())
+        final_state = BotStateSchema(**final_state_dict)
 
-        # Final output
+        # Output
         print("\n📌 Final Output")
         print("=" * 40)
-        print(f"🧠 Core Intent: {state['core_intent']}")
-        print(f"📝 Context: {state['context_notes']}")
-        print(f"🎯 Developer Task: {state['developer_task']}")
-        print(f"✅ Satisfied: {state['is_satisfied']}")
-        if not state['is_satisfied']:
+        print(f"🧠 Core Intent: {final_state.core_intent}")
+        print(f"📝 Context: {final_state.context_notes}")
+        print(f"🎯 Developer Task: {final_state.developer_task}")
+        print(f"✅ Satisfied: {final_state.is_satisfied}")
+        if not final_state.is_satisfied:
             print("💡 Suggestions:")
-            for s in state["suggestions"]:
+            for s in final_state.suggestions:
                 print(f"- {s}")
         print("=" * 60)
 

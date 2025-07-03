@@ -1,6 +1,18 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
+
+class BotStateSchema(BaseModel):
+    latest_query: str
+    user_history: List[str]
+    core_intent: Optional[str] = ""
+    context_notes: Optional[str] = ""
+    developer_task: Optional[str] = ""
+    is_satisfied: Optional[bool] = False
+    suggestions: Optional[List[str]] = Field(default_factory=list)
+    communication_success: Optional[bool] = True
+    enhancement_success: Optional[bool] = True
+
 # -------------------------------
 # CommunicationAgent Contracts
 # -------------------------------
@@ -29,3 +41,5 @@ class QueryEnhancerOutput(BaseModel):
     suggestions: List[str] = Field(default_factory=list)
     success: bool = True
     message: str = "Query enhanced successfully"
+
+
