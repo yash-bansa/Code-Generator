@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Dict,Any,List, Optional
+from pathlib import Path
 
 
 class BotStateSchema(BaseModel):
@@ -41,5 +42,27 @@ class QueryEnhancerOutput(BaseModel):
     suggestions: List[str] = Field(default_factory=list)
     success: bool = True
     message: str = "Query enhanced successfully"
+
+
+# -------------------------------
+# Master Planner Agent Contracts
+# -------------------------------  
+
+class MasterPlannerInput(BaseModel):
+    parsed_config: Dict[str, Any]
+    project_path: Path
+    user_question: str
+
+class SuggestedChange(BaseModel):
+    type: str
+    target: str
+    description: str
+
+class MasterPlannerOutput(BaseModel):
+    needs_modification: bool
+    modification_type: Optional[str] = ""
+    priority: Optional[str] = "low"
+    reason: str
+    suggested_changes: List[SuggestedChange] = Field(default_factory=list)
 
 

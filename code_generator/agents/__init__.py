@@ -9,9 +9,11 @@ Contains agents for the code generation pipeline:
   
 from .query_rephrase_agent.QueryRephraseAgent import QueryRephraserAgent
 from .communication_agent.Communication_agent import CommunicationAgent
+from .master_planner_agent.master_planner_agent import MasterPlannerAgent
 
 
 __all__ = [
     "QueryRephraserAgent",
-    "CommunicationAgent"
+    "CommunicationAgent",
+    "MasterPlannerAgent"
 ]
