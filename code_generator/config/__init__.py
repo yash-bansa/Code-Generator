@@ -12,9 +12,15 @@ from .agents_io import (
     QueryEnhancerOutput,
     MasterPlannerInput,
     MasterPlannerOutput,
-    SuggestedChange )
+    SuggestedChange,
+    DeltaAnalyzerInput,
+    DeltaAnalyzerOutput,
+    Modification )
 
 __all__ = [
+    'DeltaAnalyzerInput',
+    'DeltaAnalyzerOutput',
+    'Modification',
     'CommunicationInput',
     'CommunicationOutput',
     'QueryEnhancerInput',

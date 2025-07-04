@@ -66,3 +66,29 @@ class MasterPlannerOutput(BaseModel):
     suggested_changes: List[SuggestedChange] = Field(default_factory=list)
 
 
+
+# -------------------------------
+# Delta Analyzer Agent Contracts
+# -------------------------------  
+
+class Modification(BaseModel):
+    action: str
+    target_type: str
+    target_name: str
+    line_number: Optional[int] = 0
+    old_code: Optional[str] = ""
+    new_code: str
+    explanation: str
+
+class DeltaAnalyzerInput(BaseModel):
+    file_path: str
+    file_content: str
+    file_analysis: dict
+    config: dict
+
+class DeltaAnalyzerOutput(BaseModel):
+    modifications: List[Modification]
+    new_dependencies: List[str] = Field(default_factory=list)
+    testing_suggestions: List[str] = Field(default_factory=list)
+    potential_issues: List[str] = Field(default_factory=list)
+
