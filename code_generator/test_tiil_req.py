@@ -26,10 +26,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ---------- Agent Initialization ----------
-print("\n🤖 Initializing LangGraph-style Query Agents...")
+print("\nInitializing LangGraph-style Query Agents...")
 communication_agent = CommunicationAgent()
 query_rephraser_agent = QueryRephraserAgent()
-print("✅ Agents initialized successfully!")
+print("Agents initialized successfully!")
 
 # ---------- Helper to ensure correct schema ----------
 def ensure_state_schema(state: Union[dict, BaseModel]) -> BotStateSchema:
@@ -40,7 +40,7 @@ def ensure_state_schema(state: Union[dict, BaseModel]) -> BotStateSchema:
 # ---------- LangGraph-Compatible Nodes ----------
 async def communication_node(state: dict) -> dict:
     state_obj = ensure_state_schema(state)
-    logger.info("🧠 Communication Node: Extracting intent...")
+    logger.info("Communication Node: Extracting intent...")
 
     comm_input = CommunicationInput(
         user_query=state_obj.latest_query,
@@ -52,13 +52,13 @@ async def communication_node(state: dict) -> dict:
     state_obj.context_notes = result.context_notes
     state_obj.communication_success = result.success
 
-    logger.info(f"✅ Core Intent: {result.core_intent}")
-    logger.info(f"📝 Context Notes: {result.context_notes}")
+    logger.info(f"Core Intent: {result.core_intent}")
+    logger.info(f"Context Notes: {result.context_notes}")
     return state_obj.dict()
 
 async def query_enhancement_node(state: dict) -> dict:
     state_obj = ensure_state_schema(state)
-    logger.info("🔧 Query Enhancement Node: Rephrasing and validating...")
+    logger.info("Query Enhancement Node: Rephrasing and validating...")
 
     enhancer_input = QueryEnhancerInput(
         core_intent=state_obj.core_intent,
@@ -71,10 +71,10 @@ async def query_enhancement_node(state: dict) -> dict:
     state_obj.suggestions = result.suggestions
     state_obj.enhancement_success = result.success
 
-    logger.info(f"🎯 Developer Task: {result.developer_task}")
-    logger.info(f"✅ Is Satisfied: {result.is_satisfied}")
+    logger.info(f"Developer Task: {result.developer_task}")
+    logger.info(f"Is Satisfied: {result.is_satisfied}")
     if not result.is_satisfied:
-        logger.info("💡 Suggestions:")
+        logger.info("Suggestions:")
         for s in result.suggestions:
             logger.info(f"- {s}")
 
@@ -88,12 +88,12 @@ async def main():
     history: List[str] = []
 
     while True:
-        user_query = input("\n💬 Describe your task (or type 'exit'): ").strip()
+        user_query = input("\nDescribe your task (or type 'exit'): ").strip()
         if not user_query:
-            print("⚠️ Please enter a valid input.")
+            print("Please enter a valid input.")
             continue
         if user_query.lower() in ["exit", "quit"]:
-            print("👋 Exiting...")
+            print("Exiting...")
             break
 
         history.append(user_query)
@@ -111,26 +111,26 @@ async def main():
         builder.set_finish_point("query_enhancement_node")
         graph = builder.compile()
 
-        print("\n🧩 LangGraph Structure:")
+        print("\nLangGraph Structure:")
         try:
             ascii_art = graph.get_graph().draw_ascii()
             print(ascii_art)
         except Exception as e:
-            logger.warning(f"⚠️ Unable to draw graph structure: {e}")
+            logger.warning(f"Unable to draw graph structure: {e}")
 
         # Run the graph
         final_state_dict = await graph.ainvoke(state.dict())
         final_state = BotStateSchema(**final_state_dict)
 
         # Output
-        print("\n📌 Final Output")
+        print("\nFinal Output")
         print("=" * 40)
-        print(f"🧠 Core Intent: {final_state.core_intent}")
-        print(f"📝 Context: {final_state.context_notes}")
-        print(f"🎯 Developer Task: {final_state.developer_task}")
-        print(f"✅ Satisfied: {final_state.is_satisfied}")
+        print(f"Core Intent: {final_state.core_intent}")
+        print(f"Context: {final_state.context_notes}")
+        print(f"Developer Task: {final_state.developer_task}")
+        print(f"Satisfied: {final_state.is_satisfied}")
         if not final_state.is_satisfied:
-            print("💡 Suggestions:")
+            print("Suggestions:")
             for s in final_state.suggestions:
                 print(f"- {s}")
         print("=" * 60)

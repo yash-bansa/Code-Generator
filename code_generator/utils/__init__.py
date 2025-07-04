@@ -4,10 +4,10 @@ Contains file handling and LLM client utilities
 """
 
 from .file_handler import FileHandler
-from .llm_client import LMStudioClient, llm_client
+from .llm_client import LLMClient, llm_client
 
 __all__ = [
     'FileHandler',
-    'LMStudioClient',
+    'LLMClient',
     'llm_client'
 ]

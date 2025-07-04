@@ -5,7 +5,7 @@ from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-class LMStudioClient:
+class LLMClient:
     def __init__(self):
         # Get current provider configuration
         self.config = settings.get_current_provider_config()
@@ -73,4 +73,4 @@ class LMStudioClient:
         return await self.chat_completion(messages, system_prompt=system_prompt)
 
 # Global instance
-llm_client = LMStudioClient()
+llm_client = LLMClient()
