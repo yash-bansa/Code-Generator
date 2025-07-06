@@ -63,6 +63,27 @@ class Settings:
     # ==============================================
     # UTILITY METHODS
     # ==============================================
+
+    # ==============================================
+    # REDIS CONFIGURATION
+    # ==============================================
+    REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+    REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+    REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
+    REDIS_DB = int(os.getenv("REDIS_DB", 0))
+
+    @classmethod
+    def get_redis_connection(cls):
+        """Get a Redis connection object"""
+        import redis
+        return redis.Redis(
+            host=cls.REDIS_HOST,
+            port=cls.REDIS_PORT,
+            password=cls.REDIS_PASSWORD or None,
+            db=cls.REDIS_DB,
+            decode_responses=True
+        )
+
     @classmethod
     def ensure_output_directory(cls):
         """Ensure output directory exists"""
