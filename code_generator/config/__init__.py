@@ -15,7 +15,10 @@ from .agents_io import (
     SuggestedChange,
     DeltaAnalyzerInput,
     DeltaAnalyzerOutput,
-    Modification )
+    Modification,
+    TargetFileOutput,
+    CrossFileDependency,
+    FileAnalysisResult )
 
 __all__ = [
     'DeltaAnalyzerInput',
@@ -30,5 +33,8 @@ __all__ = [
     'SuggestedChange',
     'BotStateSchema',
     'Settings',
-    'settings'
+    'settings',
+    'TargetFileOutput',
+    'CrossFileDependency',
+    'FileAnalysisResult'
 ]

@@ -1,18 +1,9 @@
 from pydantic import BaseModel, Field
-from typing import Dict,Any,List, Optional
+from typing import Dict,Any,List, Optional, Literal
 from pathlib import Path
 
 
-class BotStateSchema(BaseModel):
-    latest_query: str
-    user_history: List[str]
-    core_intent: Optional[str] = ""
-    context_notes: Optional[str] = ""
-    developer_task: Optional[str] = ""
-    is_satisfied: Optional[bool] = False
-    suggestions: Optional[List[str]] = Field(default_factory=list)
-    communication_success: Optional[bool] = True
-    enhancement_success: Optional[bool] = True
+
 
 # -------------------------------
 # CommunicationAgent Contracts
@@ -48,24 +39,50 @@ class QueryEnhancerOutput(BaseModel):
 # Master Planner Agent Contracts
 # -------------------------------  
 
+
 class MasterPlannerInput(BaseModel):
     parsed_config: Dict[str, Any]
     project_path: Path
     user_question: str
 
+
 class SuggestedChange(BaseModel):
-    type: str
+    type: Literal["add_function", "modify_function", "add_import", "modify_variable"]
     target: str
     description: str
 
-class MasterPlannerOutput(BaseModel):
+
+class CrossFileDependency(BaseModel):
+    source_file: str
+    target_file: str
+    linked_element: str
+    type: Literal["function_usage", "class_usage", "variable_usage"]
+    reason: str
+
+
+class FileAnalysisResult(BaseModel):
     needs_modification: bool
-    modification_type: Optional[str] = ""
-    priority: Optional[str] = "low"
+    modification_type: Optional[
+        Literal["data_loading", "data_transformation", "output_handling", "configuration", "utility"]
+    ] = ""
+    priority: Literal["high", "medium", "low"] = "low"
     reason: str
     suggested_changes: List[SuggestedChange] = Field(default_factory=list)
+    cross_file_dependencies: List[CrossFileDependency] = Field(default_factory=list)
 
 
+class TargetFileOutput(BaseModel):
+    file_path: str
+    file_info: Dict[str, Any]
+    structure: Dict[str, Any]
+    analysis: FileAnalysisResult
+    priority: Literal["high", "medium", "low"]
+
+
+class MasterPlannerOutput(BaseModel):
+    success: bool
+    message: str
+    files_to_modify: List[TargetFileOutput] = Field(default_factory=list)
 
 # -------------------------------
 # Delta Analyzer Agent Contracts
@@ -92,3 +109,23 @@ class DeltaAnalyzerOutput(BaseModel):
     testing_suggestions: List[str] = Field(default_factory=list)
     potential_issues: List[str] = Field(default_factory=list)
 
+
+class BotStateSchema(BaseModel):
+    latest_query: str
+    user_history: List[str]
+    
+    # Communication Agent Output
+    core_intent: Optional[str] = ""
+    context_notes: Optional[str] = ""
+    communication_success: bool = False
+
+    # Query Rephraser Agent Output
+    developer_task: Optional[str] = ""
+    is_satisfied: bool = False
+    suggestions: List[str] = []
+    enhancement_success: bool = False
+
+    # Master Planner Agent Output
+    master_planner_success: bool = False
+    master_planner_message: Optional[str] = ""
+    master_planner_result: List[TargetFileOutput] = Field(default_factory=list)

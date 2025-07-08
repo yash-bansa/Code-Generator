@@ -76,12 +76,13 @@ class Settings:
     def get_redis_connection(cls):
         """Get a Redis connection object"""
         import redis
-        return redis.Redis(
+        return redis.StrictRedis(
             host=cls.REDIS_HOST,
             port=cls.REDIS_PORT,
             password=cls.REDIS_PASSWORD or None,
             db=cls.REDIS_DB,
-            decode_responses=True
+            decode_responses=True,
+            ssl = True,
         )
 
     @classmethod
