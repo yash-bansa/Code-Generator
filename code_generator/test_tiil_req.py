@@ -6,7 +6,7 @@ from pathlib import Path
 from langgraph.graph import StateGraph
 from typing import List, Union
 from pydantic import BaseModel
-from agents import CommunicationAgent, QueryRephraserAgent, MasterPlannerAgent
+from agents import CommunicationAgent, QueryRephraserAgent, MasterPlannerAgent, DeltaAnalyzerAgent
 from config.agents_io import (
     BotStateSchema,
     CommunicationInput,
@@ -14,7 +14,10 @@ from config.agents_io import (
     QueryEnhancerInput,
     QueryEnhancerOutput,
     MasterPlannerInput,
-    MasterPlannerOutput
+    MasterPlannerOutput,
+    DeltaAnalyzerInput,
+    DeltaAnalyzerOutput,
+    Modification,
 )
 from config.settings import settings
 
@@ -37,6 +40,7 @@ print("\nInitializing LangGraph-style Query Agents...")
 communication_agent = CommunicationAgent()
 query_rephraser_agent = QueryRephraserAgent()
 master_planner_agent = MasterPlannerAgent()
+delta_analyzer_agent = DeltaAnalyzerAgent()  # NEW: Initialize Delta Analyzer Agent
 print("Agents initialized successfully!")
 
 # ---------- Helper Functions ----------
@@ -201,6 +205,118 @@ def ensure_state_schema(state: Union[dict, BaseModel]) -> BotStateSchema:
         return state
     return BotStateSchema(**state)
 
+# ---------- NEW: Helper to print detailed modification plan ----------
+def print_modification_plan(modification_plan: dict):
+    """Print detailed modification plan from Delta Analyzer."""
+    if not modification_plan:
+        print("📝 No modification plan available.")
+        return
+    
+    print("\n🔧 DELTA ANALYZER - MODIFICATION PLAN")
+    print("=" * 80)
+    
+    # Plan Overview
+    print(f"📊 PLAN OVERVIEW:")
+    print(f"   • Files to Modify: {len(modification_plan.get('files_to_modify', []))}")
+    print(f"   • Estimated Complexity: {modification_plan.get('estimated_complexity', 'Unknown')}")
+    print(f"   • Backup Required: {modification_plan.get('backup_required', True)}")
+    print(f"   • Cross-file Dependencies: {len(modification_plan.get('dependencies', []))}")
+    
+    # Execution Order
+    execution_order = modification_plan.get('execution_order', [])
+    if execution_order:
+        print(f"\n📋 EXECUTION ORDER:")
+        for i, file_path in enumerate(execution_order, 1):
+            file_name = Path(file_path).name
+            print(f"   {i}. {file_name}")
+    
+    # Risks
+    risks = modification_plan.get('risks', [])
+    if risks:
+        print(f"\n⚠️  IDENTIFIED RISKS:")
+        for risk in risks:
+            print(f"   • {risk}")
+    
+    # Cross-file Impact
+    cross_impacts = modification_plan.get('cross_file_impact', [])
+    if cross_impacts:
+        print(f"\n🔗 CROSS-FILE DEPENDENCIES:")
+        for impact in cross_impacts:
+            source = Path(impact.get('source_file', '')).name
+            affected = [Path(f).name for f in impact.get('affected_files', [])]
+            print(f"   • {source} → {', '.join(affected)}")
+            if impact.get('linked_elements'):
+                elements = ', '.join(impact['linked_elements'])
+                print(f"     Elements: {elements}")
+    
+    # Detailed File Modifications
+    files_to_modify = modification_plan.get('files_to_modify', [])
+    if files_to_modify:
+        print(f"\n📁 DETAILED FILE MODIFICATIONS:")
+        print("-" * 80)
+        
+        for i, file_info in enumerate(files_to_modify, 1):
+            file_path = file_info.get('file_path', 'Unknown')
+            file_name = Path(file_path).name
+            priority = file_info.get('priority', 'medium')
+            mod_type = file_info.get('modification_type', 'general')
+            
+            print(f"\n File {i}: {file_name}")
+            print(f" Priority: {priority.upper()}")
+            print(f" Type: {mod_type}")
+            print(f" Full Path: {file_path}")
+            
+            # Suggestions (from Delta Analyzer)
+            suggestions = file_info.get('suggestions', {})
+            if suggestions:
+                modifications = suggestions.get('modifications', [])
+                if modifications:
+                    print(f"   🔧 MODIFICATIONS ({len(modifications)}):")
+                    for j, mod in enumerate(modifications, 1):
+                        action = mod.get('action', 'unknown')
+                        target_type = mod.get('target_type', 'unknown')
+                        target_name = mod.get('target_name', 'unknown')
+                        line_num = mod.get('line_number', 0)
+                        explanation = mod.get('explanation', 'No explanation provided')
+                        
+                        print(f"     {j}. {action.upper()} {target_type}: {target_name}")
+                        if line_num:
+                            print(f"        Line: {line_num}")
+                        print(f"        Reason: {explanation}")
+                        
+                        # Show code changes if available
+                        old_code = mod.get('old_code')
+                        new_code = mod.get('new_code')
+                        if old_code and new_code:
+                            print(f"        Old Code: {old_code[:50]}...")
+                            print(f"        New Code: {new_code[:50]}...")
+                        elif new_code:
+                            print(f"        New Code: {new_code[:50]}...")
+                
+                # New Dependencies
+                new_deps = suggestions.get('new_dependencies', [])
+                if new_deps:
+                    print(f"   📦 NEW DEPENDENCIES: {', '.join(new_deps)}")
+                
+                # Testing Suggestions
+                testing = suggestions.get('testing_suggestions', [])
+                if testing:
+                    print(f"   🧪 TESTING SUGGESTIONS:")
+                    for test in testing:
+                        print(f"     • {test}")
+                
+                # Potential Issues
+                issues = suggestions.get('potential_issues', [])
+                if issues:
+                    print(f"   ⚠️  POTENTIAL ISSUES:")
+                    for issue in issues:
+                        print(f"     • {issue}")
+            
+            print("-" * 80)
+    
+    print(f"\n✅ MODIFICATION PLAN COMPLETE")
+    print("=" * 80)
+
 # ---------- Helper to print detailed plan ----------
 def print_detailed_plan(files_to_modify: List):
     """Print detailed plan for each file."""
@@ -208,7 +324,7 @@ def print_detailed_plan(files_to_modify: List):
         print("📝 No detailed plan available.")
         return
     
-    print("\n📋 DETAILED MODIFICATION PLAN")
+    print("\n📋 MASTER PLANNER - DETAILED FILE ANALYSIS")
     print("=" * 70)
     
     for i, file_info in enumerate(files_to_modify, 1):
@@ -341,6 +457,9 @@ async def master_planner_node(state: dict) -> dict:
         with open(config_path, 'r') as f:
             parsed_config = json.load(f)
         
+        # Store parsed_config in state for Delta Analyzer
+        state_obj.parsed_config = parsed_config
+        
         # Prepare project path (same directory as config for this example)
         project_path = config_path.parent / "sample_project"
         if not project_path.exists():
@@ -365,13 +484,212 @@ async def master_planner_node(state: dict) -> dict:
         logger.info(f"Master Planner Success: {result.success}")
         logger.info(f"Master Planner Message: {result.message}")
         logger.info(f"Files to Modify: {len(result.files_to_modify)}")
-        logger.info(f"The final result is: {result}")
         
     except Exception as e:
         logger.error(f"Error in Master Planner Node: {e}")
         state_obj.master_planner_success = False
         state_obj.master_planner_message = f"Error: {str(e)}"
         state_obj.master_planner_result = []
+    
+    return state_obj.dict()
+
+# ---------- NEW: Delta Analyzer Node ----------
+async def delta_analyzer_node(state: dict) -> dict:
+    state_obj = ensure_state_schema(state)
+    logger.info("Delta Analyzer Node: Creating modification plan...")
+    
+    try:
+        # Get target files from Master Planner result
+        target_files = state_obj.master_planner_result
+        parsed_config = state_obj.parsed_config
+        
+        if not target_files:
+            logger.warning("No target files provided to Delta Analyzer")
+            state_obj.delta_analyzer_success = False
+            state_obj.delta_analyzer_message = "No target files provided"
+            state_obj.modification_plan = {}
+            return state_obj.dict()
+        
+        logger.info(f"Converting {len(target_files)} files from Pydantic models to dict format")
+        
+        # Convert target_files to dict format - FIXED CONVERSION LOGIC
+        target_files_dict = []
+        for file_info in target_files:
+            try:
+                if hasattr(file_info, 'dict') and callable(getattr(file_info, 'dict')):
+                    # Pydantic model with dict() method
+                    file_dict = file_info.dict()
+                    logger.debug(f"Converted Pydantic model to dict: {file_dict.get('file_path', 'unknown')}")
+                elif hasattr(file_info, '__dict__'):
+                    # Object with __dict__ attribute
+                    file_dict = file_info.__dict__
+                    logger.debug(f"Converted object __dict__ to dict: {file_dict.get('file_path', 'unknown')}")
+                elif isinstance(file_info, dict):
+                    # Already a dict
+                    file_dict = file_info
+                    logger.debug(f"Already a dict: {file_dict.get('file_path', 'unknown')}")
+                else:
+                    # Try to access common attributes directly
+                    file_dict = {
+                        'file_path': getattr(file_info, 'file_path', ''),
+                        'file_info': getattr(file_info, 'file_info', {}),
+                        'structure': getattr(file_info, 'structure', {}),
+                        'analysis': getattr(file_info, 'analysis', {}),
+                        'priority': getattr(file_info, 'priority', 'medium')
+                    }
+                    logger.debug(f"Manually extracted attributes: {file_dict.get('file_path', 'unknown')}")
+                
+                # Ensure required fields exist
+                if not file_dict.get('file_path'):
+                    logger.warning(f"Missing file_path in file_info: {file_dict}")
+                    continue
+                
+                target_files_dict.append(file_dict)
+                
+            except Exception as conversion_error:
+                logger.error(f"Error converting file_info to dict: {conversion_error}")
+                logger.error(f"File info type: {type(file_info)}")
+                logger.error(f"File info attributes: {dir(file_info)}")
+                continue
+        
+        if not target_files_dict:
+            logger.error("No valid files after conversion")
+            state_obj.delta_analyzer_success = False
+            state_obj.delta_analyzer_message = "No valid files after conversion"
+            state_obj.modification_plan = {}
+            return state_obj.dict()
+        
+        logger.info(f"Successfully converted {len(target_files_dict)} files to dict format")
+        
+        # Process each file individually and collect results
+        all_file_modifications = []
+        all_dependencies = set()
+        all_testing_suggestions = []
+        all_potential_issues = []
+        all_cross_file_impacts = []
+        all_implementation_notes = []
+        
+        for file_dict in target_files_dict:
+            try:
+                file_path = file_dict.get('file_path', '')
+                logger.debug(f"Processing file: {file_path}")
+                
+                # Read file content if not provided
+                file_content = file_dict.get('file_content', '')
+                if not file_content and file_path:
+                    try:
+                        from utils.file_handler import FileHandler
+                        from pathlib import Path
+                        file_content = FileHandler.read_file(Path(file_path))
+                        file_dict['file_content'] = file_content
+                        logger.debug(f"Read file content for: {file_path}")
+                    except Exception as read_error:
+                        logger.warning(f"Could not read file content for {file_path}: {read_error}")
+                        file_content = f"# Could not read file: {read_error}"
+                
+                # Validate and create DeltaAnalyzerInput for each file
+                delta_input = DeltaAnalyzerInput(
+                    file_path=file_path,
+                    file_content=file_content,
+                    file_analysis=file_dict.get('analysis', {}),
+                    config=parsed_config
+                )
+                logger.debug(f"Created DeltaAnalyzerInput for: {delta_input.file_path}")
+                
+                # Call Delta Analyzer agent for individual file
+                file_result = await delta_analyzer_agent.suggest_file_changes(
+                    file_dict, parsed_config
+                )
+                
+                # Validate output using Pydantic model
+                try:
+                    # Extract the core DeltaAnalyzerOutput data
+                    output_data = {
+                        'modifications': file_result.get('modifications', []),
+                        'new_dependencies': file_result.get('new_dependencies', []),
+                        'testing_suggestions': file_result.get('testing_suggestions', []),
+                        'potential_issues': file_result.get('potential_issues', []),
+                        'cross_file_impacts': file_result.get('cross_file_impacts', []),
+                        'implementation_notes': file_result.get('implementation_notes', [])
+                    }
+                    
+                    validated_output = DeltaAnalyzerOutput(**output_data)
+                    logger.debug(f"Validated DeltaAnalyzerOutput for: {delta_input.file_path}")
+                    
+                    # Collect results
+                    file_modification_info = {
+                        "file_path": file_path,
+                        "priority": file_dict.get('priority', 'medium'),
+                        "modification_type": file_dict.get('analysis', {}).get('modification_type', 'general'),
+                        "suggestions": validated_output.dict(),
+                        "cross_dependencies": file_dict.get('analysis', {}).get('cross_file_dependencies', []),
+                        "timestamp": file_result.get('timestamp', 0),
+                        "original_priority": file_result.get('original_priority', 'medium')
+                    }
+                    
+                    all_file_modifications.append(file_modification_info)
+                    
+                    # Aggregate data
+                    all_dependencies.update(validated_output.new_dependencies)
+                    all_testing_suggestions.extend(validated_output.testing_suggestions)
+                    all_potential_issues.extend(validated_output.potential_issues)
+                    all_cross_file_impacts.extend(validated_output.cross_file_impacts or [])
+                    all_implementation_notes.extend(validated_output.implementation_notes or [])
+                    
+                    logger.info(f"Successfully processed file: {file_path}")
+                    
+                except Exception as validation_error:
+                    logger.warning(f"Output validation failed for {file_path}: {validation_error}")
+                    # Add fallback entry
+                    all_file_modifications.append({
+                        "file_path": file_path,
+                        "priority": file_dict.get('priority', 'medium'),
+                        "modification_type": file_dict.get('analysis', {}).get('modification_type', 'general'),
+                        "suggestions": file_result,  # Use raw result
+                        "cross_dependencies": file_dict.get('analysis', {}).get('cross_file_dependencies', []),
+                        "validation_error": str(validation_error)
+                    })
+                    
+            except Exception as file_error:
+                logger.error(f"Error processing file {file_dict.get('file_path', 'unknown')}: {file_error}")
+                all_potential_issues.append(f"Failed to process {file_dict.get('file_path', 'unknown')}: {str(file_error)}")
+        
+        # Call the comprehensive modification plan creation
+        logger.info("Creating comprehensive modification plan...")
+        modification_plan = await delta_analyzer_agent.create_modification_plan(
+            target_files_dict, parsed_config
+        )
+        
+        # Enhance the plan with validated Pydantic data
+        enhanced_plan = {
+            **modification_plan,
+            "validated_files": all_file_modifications,
+            "aggregated_dependencies": list(all_dependencies),
+            "aggregated_testing_suggestions": all_testing_suggestions,
+            "aggregated_potential_issues": all_potential_issues,
+            "aggregated_cross_file_impacts": all_cross_file_impacts,
+            "aggregated_implementation_notes": all_implementation_notes,
+            "pydantic_validation": True
+        }
+        
+        # Update state with results
+        state_obj.modification_plan = enhanced_plan
+        state_obj.delta_analyzer_success = True
+        state_obj.delta_analyzer_message = f"Modification plan created successfully with {len(all_file_modifications)} files validated"
+        
+        logger.info(f"Delta Analyzer Success: {state_obj.delta_analyzer_success}")
+        logger.info(f"Modification Plan Files: {len(enhanced_plan.get('files_to_modify', []))}")
+        logger.info(f"Validated Files: {len(all_file_modifications)}")
+        logger.info(f"Estimated Complexity: {enhanced_plan.get('estimated_complexity', 'Unknown')}")
+        logger.info(f"Total Dependencies: {len(all_dependencies)}")
+        
+    except Exception as e:
+        logger.error(f"Error in Delta Analyzer Node: {e}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        state_obj.delta_analyzer_success = False
+        state_obj.delta_analyzer_message = f"Error: {str(e)}"
+        state_obj.modification_plan = {}
     
     return state_obj.dict()
 
@@ -384,20 +702,22 @@ def should_proceed_to_master_planner(state: dict) -> str:
     else:
         return "__end__"
 
-def should_retry_after_master_planner(state: dict) -> str:
-    """Determine whether to retry or end after master planner"""
+def should_proceed_to_delta_analyzer(state: dict) -> str:
+    """Determine whether to proceed to delta analyzer or end"""
     state_obj = ensure_state_schema(state)
     if state_obj.master_planner_success:
-        # Master planner succeeded, we're done
-        return "__end__"
+        return "delta_analyzer"
     else:
-        # ✅ Master planner failed, but don't auto-retry - let main loop handle it
         return "__end__"
+
+def should_end_after_delta_analyzer(state: dict) -> str:
+    """Always end after delta analyzer"""
+    return "__end__"
 
 # ---------- Run LangGraph Flow ----------
 async def main():
-    print("\nWelcome to the LangGraph Query Clarifier")
-    print("=" * 60)
+    print("\nWelcome to the LangGraph Query Clarifier with Delta Analyzer")
+    print("=" * 70)
     
     # Get user ID (you could make this interactive or configurable)
     current_user = "default_user"
@@ -416,7 +736,7 @@ async def main():
             print("Please enter a valid input.")
             continue
             
-        # Handle special commands
+        # Handle special commands (keeping all existing command handling)
         if user_input.lower() in ["exit", "quit", "q"]:
             print(" Goodbye!")
             break
@@ -507,11 +827,12 @@ async def main():
                 user_history=history
             )
             
-            # Build LangGraph with simplified flow (no auto-retry loop)
+            # Build LangGraph with Delta Analyzer integration
             builder = StateGraph(dict)
             builder.add_node("communication_node", communication_node)
             builder.add_node("query_enhancement_node", query_enhancement_node)
             builder.add_node("master_planner_node", master_planner_node)
+            builder.add_node("delta_analyzer_node", delta_analyzer_node)  # NEW: Add Delta Analyzer node
             
             builder.set_entry_point("communication_node")
             builder.add_edge("communication_node", "query_enhancement_node")
@@ -526,10 +847,20 @@ async def main():
                 }
             )
             
-            # ✅ FIXED: No auto-retry loop in graph - just end
+            # NEW: Add conditional edge: go to delta analyzer if master planner succeeds
             builder.add_conditional_edges(
                 "master_planner_node",
-                should_retry_after_master_planner,
+                should_proceed_to_delta_analyzer,
+                {
+                    "delta_analyzer": "delta_analyzer_node",
+                    "__end__": "__end__"
+                }
+            )
+            
+            # NEW: End after delta analyzer
+            builder.add_conditional_edges(
+                "delta_analyzer_node",
+                should_end_after_delta_analyzer,
                 {
                     "__end__": "__end__"
                 }
@@ -574,9 +905,9 @@ async def main():
                 print(f"Master Planner Message: {final_state.master_planner_message}")
                 
                 if final_state.master_planner_success:
-                    # ✅ SUCCESS: Show files to modify and exit retry loop
+                    # Show files identified by Master Planner
                     if final_state.master_planner_result:
-                        print(f"\n📊 SUMMARY")
+                        print(f"\n📊 MASTER PLANNER SUMMARY")
                         print(f"Files to Modify ({len(final_state.master_planner_result)}):")
                         for i, file_info in enumerate(final_state.master_planner_result, 1):
                             print(f"  {i}. {file_info.file_path}")
@@ -584,14 +915,27 @@ async def main():
                             if hasattr(file_info, 'analysis') and hasattr(file_info.analysis, 'reason'):
                                 print(f"     Reason: {file_info.analysis.reason}")
                         
-                        # ✅ NEW: Print detailed plan
+                        # Print detailed Master Planner analysis
                         print_detailed_plan(final_state.master_planner_result)
-                        
+                    
+                    # NEW: Show Delta Analyzer results
+                    print(f"\nDelta Analyzer Success: {getattr(final_state, 'delta_analyzer_success', False)}")
+                    print(f"Delta Analyzer Message: {getattr(final_state, 'delta_analyzer_message', 'Not executed')}")
+                    
+                    if getattr(final_state, 'delta_analyzer_success', False):
+                        # ✅ SUCCESS: Show modification plan
+                        modification_plan = getattr(final_state, 'modification_plan', {})
+                        if modification_plan:
+                            print_modification_plan(modification_plan)
+                        else:
+                            print("No modification plan generated.")
                     else:
-                        print("No files identified for modification.")
+                        # Delta Analyzer failed
+                        print(f"\n❌ Delta Analyzer Failed: {getattr(final_state, 'delta_analyzer_message', 'Unknown error')}")
+                    
                     break  # Success - exit retry loop
                 else:
-                    # ❌ FAILURE: Show why it failed and ask for clarification
+                    # ❌ MASTER PLANNER FAILURE: Show why it failed and ask for clarification
                     print(f"\n Master Planner Failed (Attempt {retry_count + 1}/{max_retries})")
                     print(f"Reason: {final_state.master_planner_message}")
                     print("\nThis might be because:")

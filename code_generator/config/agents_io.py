@@ -96,18 +96,22 @@ class Modification(BaseModel):
     old_code: Optional[str] = ""
     new_code: str
     explanation: str
+    affects_dependencies: Optional[List[str]] = Field(default_factory=list)  # KEEP
 
 class DeltaAnalyzerInput(BaseModel):
     file_path: str
     file_content: str
-    file_analysis: dict
-    config: dict
+    file_analysis: Dict[str, Any]  # Contains cross_dependencies already
+    config: Dict[str, Any]
+    # NO additional fields needed - keep it clean
 
 class DeltaAnalyzerOutput(BaseModel):
     modifications: List[Modification]
     new_dependencies: List[str] = Field(default_factory=list)
     testing_suggestions: List[str] = Field(default_factory=list)
     potential_issues: List[str] = Field(default_factory=list)
+    cross_file_impacts: Optional[List[str]] = Field(default_factory=list)      # KEEP
+    implementation_notes: Optional[List[str]] = Field(default_factory=list)    # KEEP
 
 
 class BotStateSchema(BaseModel):
@@ -118,14 +122,20 @@ class BotStateSchema(BaseModel):
     core_intent: Optional[str] = ""
     context_notes: Optional[str] = ""
     communication_success: bool = False
-
+    
     # Query Rephraser Agent Output
     developer_task: Optional[str] = ""
     is_satisfied: bool = False
     suggestions: List[str] = []
     enhancement_success: bool = False
-
+    
     # Master Planner Agent Output
     master_planner_success: bool = False
     master_planner_message: Optional[str] = ""
     master_planner_result: List[TargetFileOutput] = Field(default_factory=list)
+    parsed_config: Optional[Dict[str, Any]] = Field(default_factory=dict)  # NEW: Store parsed config for Delta Analyzer
+    
+    # Delta Analyzer Agent Output - NEW SECTION
+    delta_analyzer_success: bool = False
+    delta_analyzer_message: Optional[str] = ""
+    modification_plan: Optional[Dict[str, Any]] = Field(default_factory=dict)
